@@ -1,0 +1,48 @@
+### Gradle ###
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### VS Code ###
+.vscode/
+
+### OS files ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### Secrets (never commit) ###
+.env
+.env.*
+*.pem
+*.key
+credentials
+application-*-secrets.properties
+application-*-secrets.yml
+
+### Local runtime data ###
+data/
+uploads/
+*.log
+logs/
