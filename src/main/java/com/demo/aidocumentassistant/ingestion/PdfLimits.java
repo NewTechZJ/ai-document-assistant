@@ -12,8 +12,12 @@ public record PdfLimits(
         @DefaultValue("60s") Duration maxExtractionTime
 ) {
     public PdfLimits {
-        if (maxPages < 1 || maxTextChars < 1 || maxExtractionTime.isNegative() || maxExtractionTime.isZero()) {
-            throw new IllegalArgumentException("app.pdf.* limits must be positive");
+        if (maxPages < 1) {
+            throw new IllegalArgumentException("app.pdf.max-pages must be >= 1, got " + maxPages);
+        } else if (maxTextChars < 1) {
+            throw new IllegalArgumentException("app.pdf.max-text-chars must be >= 1, got " + maxTextChars);
+        } else if (maxExtractionTime.isNegative() || maxExtractionTime.isZero()) {
+            throw new IllegalArgumentException("app.pdf.max-extraction-time must be a positive duration");
         }
     }
     public static PdfLimits defaults() {

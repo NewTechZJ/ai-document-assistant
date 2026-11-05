@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 @RestController
+@Profile("local")
 @RequestMapping("/api/documents")
 public class DocumentController {
     private static final String DEFAULT_FILE_NAME = "upload.pdf";
@@ -26,7 +27,6 @@ public class DocumentController {
     }
 
     /** Dev/debug only: shows how a PDF would be chunked without storing anything. Real uploads go to S3 via presigned URL. */
-    @Profile("local")
     @PostMapping(path = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public DocumentPreview preview(
             @RequestPart("file") MultipartFile file,
