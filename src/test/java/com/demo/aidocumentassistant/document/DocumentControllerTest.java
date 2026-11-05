@@ -74,7 +74,8 @@ class DocumentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Bad request"))
-                .andExpect(jsonPath("$.detail").value("The uploaded file is empty."));
+                .andExpect(jsonPath("$.detail").value("The uploaded file is empty."))
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
     }
 
     @Test
@@ -94,22 +95,22 @@ class DocumentControllerTest {
 
     @Test
     void notAPdfIs415() throws Exception {
-        expectProblem(upload("a.pdf", "hello".getBytes(StandardCharsets.US_ASCII)), 415, "Not a PDF");
+        expectProblem(upload("a.pdf", "hello".getBytes(StandardCharsets.US_ASCII)), 415, "Not a PDF", "NOT_A_PDF");
     }
 
     @Test
     void passwordProtectedPdfIs422() throws Exception {
-        expectProblem(upload("a.pdf", TestPdfs.userPasswordProtected("x")), 422, "Encrypted PDF");
+        expectProblem(upload("a.pdf", TestPdfs.userPasswordProtected("x")), 422, "Encrypted PDF", "PDF_ENCRYPTED");
     }
 
     @Test
     void extractionDeniedPdfIs422() throws Exception {
-        expectProblem(upload("a.pdf", TestPdfs.ownerPasswordOnly("x", false)), 422, "Encrypted PDF");
+        expectProblem(upload("a.pdf", TestPdfs.ownerPasswordOnly("x", false)), 422, "Encrypted PDF", "PDF_ENCRYPTED");
     }
 
     @Test
     void scannedPdfIs422() throws Exception {
-        expectProblem(upload("a.pdf", TestPdfs.withPages("")), 422, "No extractable text");
+        expectProblem(upload("a.pdf", TestPdfs.withPages("")), 422, "No extractable text", "PDF_NO_TEXT");
     }
 
     @Test
@@ -125,11 +126,12 @@ class DocumentControllerTest {
         return mockMvc.perform(multipart(URL).file(new MockMultipartFile("file", fileName, "application/pdf", bytes)));
     }
 
-    private static void expectProblem(ResultActions result, int status, String title) throws Exception {
+    private static void expectProblem(ResultActions result, int status, String title, String code) throws Exception {
         result.andExpect(status().is(status))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(status))
                 .andExpect(jsonPath("$.title").value(title))
+                .andExpect(jsonPath("$.code").value(code))
                 .andExpect(jsonPath("$.detail").isNotEmpty());
     }
 }

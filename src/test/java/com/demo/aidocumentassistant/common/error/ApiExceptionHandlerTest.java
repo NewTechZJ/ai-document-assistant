@@ -28,11 +28,12 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    void uploadTooLargeIs413() {
-        ProblemDetail problem = handler.handleUploadTooLarge(new MaxUploadSizeExceededException(10 * 1024 * 1024));
+    void unexpectedErrorIs500WithCodeAndNoInternals() {
+        ProblemDetail problem = handler.handleUnexpected(new IllegalStateException("db password=hunter2"));
 
-        assertEquals(413, problem.getStatus());
-        assertEquals("File too large", problem.getTitle());
+        assertEquals(500, problem.getStatus());
+        assertEquals("INTERNAL_ERROR", problem.getProperties().get("code"));
+        assertFalse(problem.getDetail().contains("hunter2"));
     }
 
     @Test
