@@ -31,6 +31,9 @@ public class PdfTextExtractor {
         requirePdfHeader(pdfBytes);
 
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
+            if (document.getNumberOfPages() == 0) {
+                throw new PdfExtractionException("The PDF has no pages; it may be corrupt.");
+            }
             // PDFBox opens with the empty user password. An encrypted file that opens is "owner-password only":
             // readable, but the author may still have switched off text extraction.
             if (document.isEncrypted() && !document.getCurrentAccessPermission().canExtractContent()) {

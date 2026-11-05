@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import java.io.UncheckedIOException;
+
 /** Maps our exceptions to RFC 9457 ProblemDetail responses. Spring picks the most specific handler. */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -20,6 +22,14 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_GATEWAY, "The AI model is unavailable. Try again.");
         problem.setTitle("AI model unavailable");
+        return problem;
+    }
+
+    @ExceptionHandler(UncheckedIOException.class)
+    ProblemDetail handleUploadReadFailure(UncheckedIOException e) {
+        LOGGER.warn("Could not read upload: {}", e.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "The upload could not be read.");
+        problem.setTitle("Bad request");
         return problem;
     }
 

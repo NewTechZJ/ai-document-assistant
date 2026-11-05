@@ -19,7 +19,7 @@ import java.util.Objects;
  *       it is merged into the previous chunk instead of becoming a tiny chunk of its own.</li>
  * </ol>
  * Size guarantee: every chunk is at most targetChars, except a merged last chunk
- * (at most targetChars + minChars - 1).
+ * (at most targetChars + 2 + minChars - 1: the merge adds the "\n\n" separator plus fewer than minChars).
  * <p>
  * Each page is chunked on its own, so a chunk's pageNumber is always exact for citations.
  * Plain Java: no Spring, no I/O, deterministic, so it's easy to unit-test thoroughly.
@@ -116,16 +116,20 @@ public class Chunker {
                 continue;
             }
             if (paragraph.length() <= targetChars) {
-                pieces.add(new Piece(paragraph, true));
+                pieces.add(new Piece(paragraph, TextNormalizer.PARAGRAPH_SEPARATOR));
                 continue;
             }
             // Paragraph too long: split it into sentences (and over-long sentences into parts).
             // Packing glues neighbouring sentences back together, so chunks still end on sentence boundaries.
             boolean isFirstPieceOfParagraph = true;
-            for (String sentence : splitSentences(paragraph)) {
-                List<String> parts = sentence.length() <= targetChars ? List.of(sentence) : hardSplit(sentence);
-                for (String part : parts) {
-                    pieces.add(new Piece(part, isFirstPieceOfParagraph));
+            for (Piece sentence : splitSentences(paragraph)) {
+                List<Piece> parts = sentence.text().length() <= targetChars
+                        ? List.of(sentence)
+                        : hardSplit(sentence.text(), sentence.separator());
+                for (Piece part : parts) {
+                    pieces.add(isFirstPieceOfParagraph
+                            ? part.withSeparator(TextNormalizer.PARAGRAPH_SEPARATOR)
+                            : part);
                     isFirstPieceOfParagraph = false;
                 }
             }
@@ -138,19 +142,32 @@ public class Chunker {
      * It sometimes splits after abbreviations like "Dr."; harmless here, because packing rejoins pieces.
      * Created per call on purpose: BreakIterator is stateful and not thread-safe, and Chunker is a shared bean.
      */
-    private static List<String> splitSentences(String paragraph) {
+    private static List<Piece> splitSentences(String paragraph) {
         BreakIterator sentenceBoundaries = BreakIterator.getSentenceInstance(Locale.ROOT);
         sentenceBoundaries.setText(paragraph);
-        List<String> sentences = new ArrayList<>();
+        List<Piece> sentences = new ArrayList<>();
+        int previousEnd = 0;
         int start = sentenceBoundaries.first();
         for (int end = sentenceBoundaries.next(); end != BreakIterator.DONE;
              start = end, end = sentenceBoundaries.next()) {
-            String sentence = paragraph.substring(start, end).strip();
-            if (!sentence.isEmpty()) {
-                sentences.add(sentence);
+            int textStart = skipWhitespace(paragraph, start);
+            int textEnd = trimEnd(paragraph, textStart, end);
+            if (textStart < textEnd) {
+                // separator = what really sat between the previous sentence and this one: " " or ""
+                sentences.add(new Piece(paragraph.substring(textStart, textEnd),
+                        paragraph.substring(previousEnd, textStart)));
+                previousEnd = textEnd;
             }
         }
         return sentences;
+    }
+
+    private static int trimEnd(String text, int start, int end) {
+        int i = end;
+        while (i > start && Character.isWhitespace(text.charAt(i - 1))) {
+            i--;
+        }
+        return i;
     }
 
     /**
@@ -158,32 +175,33 @@ public class Chunker {
      * Parts are at most targetChars - overlapChars long, so the next chunk still has room for overlap.
      * Works with offsets into {@code text} (no repeated substring copies), so it is linear in the text length.
      */
-    private List<String> hardSplit(String text) {
-        int maxPartLength = targetChars - overlapChars; // validation guarantees this is >= targetChars / 2
-        BreakIterator wordBoundaries = null;           // built only if the no-whitespace fallback is needed
-        List<String> parts = new ArrayList<>();
+    private List<Piece> hardSplit(String text, String firstSeparator) {
+        int maxPartLength = targetChars - overlapChars;
+        BreakIterator wordBoundaries = null;
+        List<Piece> parts = new ArrayList<>();
+        String separator = firstSeparator;
         int start = 0;
         while (text.length() - start > maxPartLength) {
             int limit = start + maxPartLength;
             int cutIndex = lastWhitespaceAtOrBefore(text, start, limit);
             if (cutIndex <= start) {
-                // No space in the window, e.g. Chinese/Japanese. Note: parts cut here have no space between
-                // them, but packing joins them with " ", so these chunks are not exact substrings of the page.
                 if (wordBoundaries == null) {
                     wordBoundaries = BreakIterator.getWordInstance(Locale.ROOT);
                     wordBoundaries.setText(text);
                 }
-                cutIndex = wordBoundaries.preceding(limit + 1); // last boundary <= limit
+                cutIndex = wordBoundaries.preceding(limit + 1);
             }
             if (cutIndex <= start) {
-                // One "word" longer than a whole part (a URL, base64...). Cutting it is the only option.
-                cutIndex = Character.isHighSurrogate(text.charAt(limit - 1)) ? limit - 1 : limit; // keep emoji whole
+                cutIndex = Character.isHighSurrogate(text.charAt(limit - 1)) ? limit - 1 : limit;
             }
-            parts.add(text.substring(start, cutIndex).strip());
-            start = skipWhitespace(text, cutIndex);
+            int partEnd = trimEnd(text, start, cutIndex);
+            parts.add(new Piece(text.substring(start, partEnd), separator));
+            int next = skipWhitespace(text, cutIndex);
+            separator = text.substring(partEnd, next); // skipped whitespace, or "" for a mid-word cut
+            start = next;
         }
         if (start < text.length()) {
-            parts.add(text.substring(start));
+            parts.add(new Piece(text.substring(start), separator));
         }
         return parts;
     }
@@ -227,10 +245,13 @@ public class Chunker {
         return finishedChunk.subSequence(start, length).toString().strip();
     }
 
-    /** A piece of text no longer than targetChars, and whether it begins a new paragraph. */
-    private record Piece(String text, boolean startsParagraph) {
-        String separator() {
-            return startsParagraph ? TextNormalizer.PARAGRAPH_SEPARATOR : SENTENCE_SEPARATOR;
+    /**
+     * A piece of text no longer than targetChars, and the exact text that separated it from the
+     * previous piece on the page ("\n\n" between paragraphs, " " between English sentences, "" in CJK).
+     */
+    private record Piece(String text, String separator) {
+        Piece withSeparator(String newSeparator) {
+            return new Piece(text, newSeparator);
         }
     }
 }
