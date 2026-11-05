@@ -28,6 +28,8 @@ dependencies {
 	implementation 'org.springframework.ai:spring-ai-starter-model-bedrock-converse' // Claude
 	implementation 'org.springframework.ai:spring-ai-starter-model-bedrock'          // Titan embeddings
 	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'           // free local dev
+	implementation 'org.apache.pdfbox:pdfbox:3.0.8'                                  // PDF text extraction (Phase 2)
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor' // IDE autocomplete for app.chunking.*
 //	implementation 'org.springframework.ai:spring-ai-starter-vector-store-s3'
 //	implementation 'org.springframework.ai:spring-ai-vector-store-advisor'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
