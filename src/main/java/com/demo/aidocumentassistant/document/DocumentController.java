@@ -1,10 +1,12 @@
 package com.demo.aidocumentassistant.document;
 
 import com.demo.aidocumentassistant.common.error.BadRequestException;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,12 +26,18 @@ public class DocumentController {
     }
 
     /** Dev/debug only: shows how a PDF would be chunked without storing anything. Real uploads go to S3 via presigned URL. */
+    @Profile("local")
     @PostMapping(path = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public DocumentPreview preview(@RequestPart("file") MultipartFile file) {
+    public DocumentPreview preview(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(defaultValue = "false") boolean includeChunkText) {
         if (file.isEmpty()) {
             throw new BadRequestException("The uploaded file is empty.");
         }
-        return documentPreviewService.preview(safeFileName(file.getOriginalFilename()), readBytes(file));
+        return documentPreviewService.preview(
+                safeFileName(file.getOriginalFilename()),
+                readBytes(file),
+                includeChunkText);
     }
 
     /**

@@ -185,14 +185,19 @@ public class Chunker {
             int limit = start + maxPartLength;
             int cutIndex = lastWhitespaceAtOrBefore(text, start, limit);
             if (cutIndex <= start) {
+                // No space in the window, e.g. Chinese/Japanese: cut at the last word boundary.
                 if (wordBoundaries == null) {
                     wordBoundaries = BreakIterator.getWordInstance(Locale.ROOT);
                     wordBoundaries.setText(text);
                 }
-                cutIndex = wordBoundaries.preceding(limit + 1);
-            }
-            if (cutIndex <= start) {
-                cutIndex = Character.isHighSurrogate(text.charAt(limit - 1)) ? limit - 1 : limit;
+                cutIndex = wordBoundaries.preceding(limit + 1); // last boundary <= limit
+                if (cutIndex <= start) {
+                    // One "word" longer than a whole part (a URL, base64...). Cutting it is the only option.
+                    cutIndex = limit;
+                }
+                // Both cuts above can land inside a character cluster: the raw cut inside an emoji's surrogate pair,
+                // and the JDK word iterator right after a ZWJ inside an emoji sequence such as 👨‍👩‍👧.
+                cutIndex = stepBackToSafeCut(text, start, cutIndex);
             }
             int partEnd = trimEnd(text, start, cutIndex);
             parts.add(new Piece(text.substring(start, partEnd), separator));
@@ -222,6 +227,24 @@ public class Chunker {
             i++;
         }
         return i;
+    }
+
+    /**
+     * Moves a cut left until it is not inside a surrogate pair and not next to a ZWJ/ZWNJ, which belong to
+     * the characters on both sides (Indic conjuncts, Persian words, emoji sequences). Never returns <= start.
+     */
+    private static int stepBackToSafeCut(String text, int start, int cutIndex) {
+        int cut = cutIndex;
+        while (cut > start + 1 && (Character.isLowSurrogate(text.charAt(cut))
+                || isJoiner(text.charAt(cut)) || isJoiner(text.charAt(cut - 1)))) {
+            cut--;
+        }
+        return cut;
+    }
+
+    /** Zero-width non-joiner (U+200C) or zero-width joiner (U+200D). */
+    private static boolean isJoiner(char c) {
+        return c == '\u200C' || c == '\u200D';
     }
 
     /**

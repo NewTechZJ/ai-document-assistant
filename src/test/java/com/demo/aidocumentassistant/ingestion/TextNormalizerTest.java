@@ -36,8 +36,19 @@ class TextNormalizerTest {
 
     @Test
     void invisibleCharactersAreRemoved() {
-        // soft hyphen, zero-width space / non-joiner / joiner, word joiner, BOM
-        assertEquals("extraction", TextNormalizer.normalize("ex\u00ADtrac\u200Bt\u200Ci\u200Do\u2060n\uFEFF"));
+        // soft hyphen, zero-width space, word joiner, BOM
+        assertEquals("extraction", TextNormalizer.normalize("ex\u00ADtrac\u200Bti\u2060on\uFEFF"));
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @CsvSource({
+            "Persian ZWNJ,     \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645",
+            "Hindi ZWNJ,       \u0915\u094D\u200C\u0937",
+            "Hindi ZWJ,        \u0930\u094D\u200D\u092F",
+            "Emoji ZWJ,        \uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67",
+    })
+    void zeroWidthJoinersAreKept(String label, String text) {
+        assertEquals(text, TextNormalizer.normalize(text), label);
     }
 
     @Test

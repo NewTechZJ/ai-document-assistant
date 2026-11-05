@@ -1,5 +1,6 @@
 package com.demo.aidocumentassistant.document;
 
+import com.demo.aidocumentassistant.common.error.ServerBusyException;
 import com.demo.aidocumentassistant.document.DocumentPreview.ChunkPreview;
 import com.demo.aidocumentassistant.document.DocumentPreview.ChunkStats;
 import com.demo.aidocumentassistant.document.DocumentPreview.PagePreview;
@@ -10,12 +11,14 @@ import com.demo.aidocumentassistant.ingestion.PageText;
 import com.demo.aidocumentassistant.ingestion.PdfTextExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.IntSummaryStatistics;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 /** Runs extraction + chunking on an uploaded PDF and reports the result. Stores nothing. */
@@ -24,19 +27,36 @@ public class DocumentPreviewService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DocumentPreviewService.class);
     private static final int SNIPPET_CODE_POINTS = 120;
+    private static final int MAX_CHUNKS_IN_RESPONSE = 200;
 
     private final PdfTextExtractor pdfTextExtractor;
     private final Chunker chunker;
     private final ChunkingProperties chunkingProperties;
+    private final Semaphore extractionSlots;
 
-    public DocumentPreviewService(PdfTextExtractor pdfTextExtractor, Chunker chunker,
-                                  ChunkingProperties chunkingProperties) {
+    public DocumentPreviewService(
+            PdfTextExtractor pdfTextExtractor,
+            Chunker chunker,
+            ChunkingProperties chunkingProperties,
+            @Value("${app.pdf.max-concurrent:2}") int maxConcurrent) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.chunker = chunker;
         this.chunkingProperties = chunkingProperties;
+        this.extractionSlots = new Semaphore(maxConcurrent);
     }
 
-    public DocumentPreview preview(String fileName, byte[] pdfBytes) {
+    public DocumentPreview preview(String fileName, byte[] pdfBytes, boolean includeChunkText) {
+        if (!extractionSlots.tryAcquire()) {
+            throw new ServerBusyException("Too many documents are being processed. Try again in a few seconds.");
+        }
+        try {
+            return doPreview(fileName, pdfBytes, includeChunkText);   // the current method body
+        } finally {
+            extractionSlots.release();
+        }
+    }
+
+    private DocumentPreview doPreview(String fileName, byte[] pdfBytes, boolean includeChunkText) {
         long startNanos = System.nanoTime();
         var docId = "preview-" + UUID.randomUUID();
 
@@ -54,16 +74,22 @@ public class DocumentPreviewService {
                         pageSnippet(page.text())))
                 .toList();
 
+        // Full text only on request, and never more than MAX_CHUNKS_IN_RESPONSE chunks, so the response stays small.
         List<ChunkPreview> chunkPreviews = chunks.stream()
-                .map(chunk -> new ChunkPreview(chunk.index(), chunk.pageNumber(), chunk.charCount(), chunk.text()))
+                .limit(MAX_CHUNKS_IN_RESPONSE)
+                .map(chunk -> new ChunkPreview(
+                        chunk.index(),
+                        chunk.pageNumber(),
+                        chunk.charCount(),                                   // real length, even when text is a snippet
+                        includeChunkText ? chunk.text() : pageSnippet(chunk.text())))
                 .toList();
+        boolean chunksTruncated = chunks.size() > MAX_CHUNKS_IN_RESPONSE;
 
         int blankPageCount = (int) pages.stream().filter(PageText::isBlank).count();
         long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
 
-        // Counts only, never document text: logs are copied and kept far longer than you expect.
-        LOGGER.info("preview docId={} bytes={} pages={} blankPages={} chunks={} ms={}",
-                docId, pdfBytes.length, pages.size(), blankPageCount, chunks.size(), latencyMs);
+        LOGGER.info("preview docId={} bytes={} pages={} blankPages={} chunks={} fullText={} ms={}",
+                docId, pdfBytes.length, pages.size(), blankPageCount, chunks.size(), includeChunkText, latencyMs);
 
         return new DocumentPreview(
                 docId,
@@ -72,10 +98,11 @@ public class DocumentPreviewService {
                 pages.size(),
                 blankPageCount,
                 chunks.size(),
-                chunkSizeStats(chunks),
+                chunkSizeStats(chunks),          // stats use all chunks, not just the returned ones
                 chunkingProperties,
                 pagePreviews,
                 chunkPreviews,
+                chunksTruncated,
                 latencyMs);
     }
 

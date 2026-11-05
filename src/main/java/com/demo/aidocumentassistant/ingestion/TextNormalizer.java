@@ -21,8 +21,12 @@ final class TextNormalizer {
     /** What {@link #normalize} puts between paragraphs. Shared with Chunker. */
     static final String PARAGRAPH_SEPARATOR = "\n\n";
 
-    // Invisible characters PDFs like to contain: soft hyphen, zero-width space/joiners, BOM.
-    private static final Pattern INVISIBLE_CHARS = Pattern.compile("[\\u00AD\\u200B\\u200C\\u200D\\u2060\\uFEFF]");
+    // Invisible characters commonly found in PDFs: soft hyphens, zero-width spaces, and BOMs.
+    // These carry no semantic meaning in extracted text.
+    // Note: ZWJ (U+200D) and ZWNJ (U+200C) are deliberately preserved because they
+    // affect the spelling and rendering of Indic and Persian words, and maintain emoji sequences.
+    private static final Pattern INVISIBLE_CHARS = Pattern.compile("[\\u00AD\\u200B\\u2060\\uFEFF]");
+
     // Control characters except tab (\t) and newline (\n).
     private static final Pattern CONTROL_CHARS_EXCEPT_TAB_NEWLINE = Pattern.compile("[\\p{Cc}&&[^\\t\\n]]");
     // Any horizontal whitespace, including no-break and other Unicode spaces.

@@ -9,12 +9,12 @@ import org.springframework.context.annotation.Configuration;
  * Keeping the wiring here means PdfTextExtractor and Chunker stay usable with plain `new`.
  */
 @Configuration
-@EnableConfigurationProperties(ChunkingProperties.class)
+@EnableConfigurationProperties({ChunkingProperties.class, PdfLimits.class})
 public class IngestionConfig {
 
     @Bean
-    PdfTextExtractor pdfTextExtractor() {
-        return new PdfTextExtractor();
+    PdfTextExtractor pdfTextExtractor(PdfLimits limits) {
+        return new PdfTextExtractor(limits);
     }
 
     @Bean

@@ -2,8 +2,10 @@ package com.demo.aidocumentassistant.common.error;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -67,6 +69,17 @@ public class ApiExceptionHandler {
                 HttpStatus.CONTENT_TOO_LARGE, "The file is larger than the upload limit.");
         problem.setTitle("File too large");
         return problem;
+    }
+
+    @ExceptionHandler(PdfTooLargeException.class)
+    ProblemDetail handlePdfTooLarge(PdfTooLargeException e) {
+        return problem(HttpStatus.UNPROCESSABLE_CONTENT, "PDF too large to process", e);
+    }
+
+    @ExceptionHandler(ServerBusyException.class)
+    ResponseEntity<ProblemDetail> handleBusy(ServerBusyException e) {
+        ProblemDetail problem = problem(HttpStatus.SERVICE_UNAVAILABLE, "Server busy", e);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, "5").body(problem);
     }
 
     /** Our own exception messages are written for users, so they are safe to return. */

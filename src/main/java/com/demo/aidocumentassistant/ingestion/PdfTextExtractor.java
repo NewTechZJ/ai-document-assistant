@@ -4,6 +4,7 @@ import com.demo.aidocumentassistant.common.error.EncryptedPdfException;
 import com.demo.aidocumentassistant.common.error.NoExtractableTextException;
 import com.demo.aidocumentassistant.common.error.NotAPdfException;
 import com.demo.aidocumentassistant.common.error.PdfExtractionException;
+import com.demo.aidocumentassistant.common.error.PdfTooLargeException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
@@ -26,6 +27,11 @@ public class PdfTextExtractor {
     /** The PDF spec lets readers tolerate junk before the header; Acrobat looks in the first 1024 bytes. */
     private static final int HEADER_SEARCH_WINDOW = 1024;
     private static final byte[] PDF_MAGIC = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+
+    private final PdfLimits limits;
+
+    public PdfTextExtractor() { this(PdfLimits.defaults()); }
+    public PdfTextExtractor(PdfLimits limits) { this.limits = limits; }
 
     public List<PageText> extract(byte[] pdfBytes) {
         requirePdfHeader(pdfBytes);
@@ -58,16 +64,31 @@ public class PdfTextExtractor {
 
     /** One stripper call per page, so every PageText carries its exact 1-based page number. */
     private List<PageText> extractPages(PDDocument document) throws IOException {
+        int pageCount = document.getNumberOfPages();
+        if (pageCount > limits.maxPages()) {
+            throw new PdfTooLargeException("The PDF has " + pageCount + " pages; the limit is " + limits.maxPages() + ".");
+        }
+
         PDFTextStripper stripper = new PDFTextStripper();
         stripper.setLineSeparator("\n");
         stripper.setParagraphEnd("\n"); // line end + paragraph end = "\n\n", which TextNormalizer reads as a paragraph break
 
-        int pageCount = document.getNumberOfPages();
+        long deadline = System.nanoTime() + limits.maxExtractionTime().toNanos();
+        long totalChars = 0;
         List<PageText> pages = new ArrayList<>(pageCount);
         for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+            if (System.nanoTime() > deadline) {
+                throw new PdfTooLargeException("Extracting text took longer than " + limits.maxExtractionTime().toSeconds()
+                        + " s (stopped at page " + pageNumber + " of " + pageCount + ").");
+            }
             stripper.setStartPage(pageNumber);
             stripper.setEndPage(pageNumber);
             String rawPageText = stripper.getText(document);
+            totalChars += rawPageText.length();          // raw >= normalized, so this is the safe side
+            if (totalChars > limits.maxTextChars()) {
+                throw new PdfTooLargeException("The PDF contains more than " + limits.maxTextChars()
+                        + " characters of text (stopped at page " + pageNumber + ").");
+            }
             pages.add(new PageText(pageNumber, TextNormalizer.normalize(rawPageText)));
         }
         return pages;

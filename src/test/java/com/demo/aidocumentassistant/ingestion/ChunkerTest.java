@@ -287,6 +287,29 @@ class ChunkerTest {
         }
     }
 
+    @Test
+    void emojiSequencesAndIndicJoinersAreNeverSplit() {
+        String family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67"; // 👨‍👩‍👧
+        String hindi = "\u0915\u094D\u200C\u0937";                          // क्‌ष
+        List<String> pages = new ArrayList<>();
+        for (int pad = 0; pad < 12; pad++) {
+            pages.add("x".repeat(pad) + family.repeat(60)); // shift the cut through every position
+        }
+        pages.add(hindi.repeat(60));
+
+        for (String page : pages) {
+            for (Chunk chunk : chunker.chunk("doc", List.of(new PageText(1, page)))) {
+                String text = chunk.text();
+                char first = text.charAt(0);
+                char last = text.charAt(text.length() - 1);
+                assertTrue(page.contains(text));
+                assertFalse(Character.isLowSurrogate(first) || Character.isHighSurrogate(last), "split emoji: " + text);
+                assertFalse(first == '\u200D' || last == '\u200D' || first == '\u200C' || last == '\u200C',
+                        "split at a joiner: " + text);
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- known bugs (enable once fixed)
 
     @Test
