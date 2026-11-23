@@ -34,7 +34,8 @@ public class ChatService {
         this.chatClient = chatClientBuilder.defaultSystem(systemPrompt).build();
 
         // Bedrock Converse responses have no model id, so ChatReply falls back to the configured model.
-        // Set by spring.ai.bedrock.converse.chat.model (aws) or spring.ai.ollama.chat.model (local).
+        // AWS Bedrock: spring.ai.bedrock.converse.chat.options.model
+        // Local Ollama: spring.ai.ollama.chat.options.model
         this.configuredModel = chatModel.getOptions().getModel();
     }
 
