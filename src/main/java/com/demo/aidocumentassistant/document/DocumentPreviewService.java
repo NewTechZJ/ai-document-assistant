@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.document;
 
 import com.demo.aidocumentassistant.common.error.ServerBusyException;
@@ -21,7 +25,11 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
-/** Runs extraction + chunking on an uploaded PDF and reports the result. Stores nothing. */
+/**
+ * Extracts and chunks an uploaded PDF and reports the result, without storing anything.
+ *
+ * <p>Limits concurrent previews ({@code app.pdf.max-concurrent}) because PDF parsing uses a lot of memory.
+ */
 @Service
 public class DocumentPreviewService {
 
@@ -43,14 +51,28 @@ public class DocumentPreviewService {
         this.chunker = chunker;
         this.chunkingProperties = chunkingProperties;
         this.extractionSlots = new Semaphore(maxConcurrent);
+
+        LOGGER.info("Document preview ready maxConcurrent={} maxChunksInResponse={}",
+                maxConcurrent, MAX_CHUNKS_IN_RESPONSE);
     }
 
+    /**
+     * Extracts and chunks a PDF and returns page and chunk details.
+     *
+     * @param fileName         file name to echo back (display only)
+     * @param pdfBytes         the PDF content
+     * @param includeChunkText {@code true} for the full chunk text, {@code false} for a short snippet
+     * @return the preview
+     * @throws ServerBusyException if too many previews are already running (mapped to 503)
+     * @throws com.demo.aidocumentassistant.common.error.PdfExtractionException if the PDF can't be read
+     */
     public DocumentPreview preview(String fileName, byte[] pdfBytes, boolean includeChunkText) {
         if (!extractionSlots.tryAcquire()) {
+            LOGGER.warn("Preview rejected, server busy bytes={} availableSlots=0", pdfBytes.length);
             throw new ServerBusyException("Too many documents are being processed. Try again in a few seconds.");
         }
         try {
-            return doPreview(fileName, pdfBytes, includeChunkText);   // the current method body
+            return doPreview(fileName, pdfBytes, includeChunkText);
         } finally {
             extractionSlots.release();
         }
@@ -58,10 +80,14 @@ public class DocumentPreviewService {
 
     private DocumentPreview doPreview(String fileName, byte[] pdfBytes, boolean includeChunkText) {
         long startNanos = System.nanoTime();
-        var docId = "preview-" + UUID.randomUUID();
+        String docId = "preview-" + UUID.randomUUID();
+        LOGGER.debug("Preview started docId={} bytes={} fullText={}", docId, pdfBytes.length, includeChunkText);
 
         List<PageText> pages = pdfTextExtractor.extract(pdfBytes);
+        LOGGER.debug("Text extracted docId={} pages={}", docId, pages.size());
+
         List<Chunk> chunks = chunker.chunk(docId, pages);
+        LOGGER.debug("Text chunked docId={} chunks={}", docId, chunks.size());
 
         Map<Integer, Long> chunkCountByPage = chunks.stream()
                 .collect(Collectors.groupingBy(Chunk::pageNumber, Collectors.counting()));
@@ -71,24 +97,32 @@ public class DocumentPreviewService {
                         page.pageNumber(),
                         page.text().length(),
                         chunkCountByPage.getOrDefault(page.pageNumber(), 0L).intValue(),
-                        pageSnippet(page.text())))
+                        snippet(page.text())))
                 .toList();
 
-        // Full text only on request, and never more than MAX_CHUNKS_IN_RESPONSE chunks, so the response stays small.
+        // Full text only on request, and at most MAX_CHUNKS_IN_RESPONSE chunks, so the response stays small.
         List<ChunkPreview> chunkPreviews = chunks.stream()
                 .limit(MAX_CHUNKS_IN_RESPONSE)
                 .map(chunk -> new ChunkPreview(
                         chunk.index(),
                         chunk.pageNumber(),
-                        chunk.charCount(),                                   // real length, even when text is a snippet
-                        includeChunkText ? chunk.text() : pageSnippet(chunk.text())))
+                        chunk.charCount(), // real length, even when text is a snippet
+                        includeChunkText ? chunk.text() : snippet(chunk.text())))
                 .toList();
         boolean chunksTruncated = chunks.size() > MAX_CHUNKS_IN_RESPONSE;
 
         int blankPageCount = (int) pages.stream().filter(PageText::isBlank).count();
         long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
 
-        LOGGER.info("preview docId={} bytes={} pages={} blankPages={} chunks={} fullText={} ms={}",
+        if (chunksTruncated) {
+            LOGGER.debug("Chunk list truncated docId={} returned={} total={}",
+                    docId, MAX_CHUNKS_IN_RESPONSE, chunks.size());
+        }
+        if (blankPageCount == pages.size()) {
+            LOGGER.warn("All pages are blank docId={} pages={}", docId, pages.size());
+        }
+
+        LOGGER.info("Preview completed docId={} bytes={} pages={} blankPages={} chunks={} fullText={} ms={}",
                 docId, pdfBytes.length, pages.size(), blankPageCount, chunks.size(), includeChunkText, latencyMs);
 
         return new DocumentPreview(
@@ -98,7 +132,7 @@ public class DocumentPreviewService {
                 pages.size(),
                 blankPageCount,
                 chunks.size(),
-                chunkSizeStats(chunks),          // stats use all chunks, not just the returned ones
+                chunkSizeStats(chunks), // stats cover all chunks, not just the returned ones
                 chunkingProperties,
                 pagePreviews,
                 chunkPreviews,
@@ -106,8 +140,8 @@ public class DocumentPreviewService {
                 latencyMs);
     }
 
-    /** First ~120 characters, cut on a code point so an emoji is never split in half. */
-    private static String pageSnippet(String text) {
+    /** First 120 characters (code points, so an emoji is never split), with "…" if cut. */
+    private static String snippet(String text) {
         if (text.codePointCount(0, text.length()) <= SNIPPET_CODE_POINTS) {
             return text;
         }
@@ -115,7 +149,7 @@ public class DocumentPreviewService {
         return text.substring(0, end).stripTrailing() + "…";
     }
 
-    /** Min / max / rounded average chunk length; all zeros when there are no chunks. */
+    /** Min, max and rounded average chunk length; all zeros when there are no chunks. */
     private static ChunkStats chunkSizeStats(List<Chunk> chunks) {
         if (chunks.isEmpty()) {
             return new ChunkStats(0, 0, 0);

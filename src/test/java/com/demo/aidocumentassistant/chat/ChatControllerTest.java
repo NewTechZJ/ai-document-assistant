@@ -5,6 +5,7 @@
 package com.demo.aidocumentassistant.chat;
 
 import com.demo.aidocumentassistant.common.error.AiCallException;
+import com.demo.aidocumentassistant.common.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -95,7 +96,7 @@ class ChatControllerTest {
         postChat("{\"message\":\"hi\"}")
                 .andExpect(status().isBadGateway())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("AI_CALL_FAILED")) // use your ErrorCode value
+                .andExpect(jsonPath("$.code").value(ErrorCode.AI_UNAVAILABLE.name()))
                 .andExpect(content().string(not(containsString("arn:aws"))));
     }
 
