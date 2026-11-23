@@ -25,6 +25,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
 	implementation 'org.springframework.ai:spring-ai-starter-model-bedrock-converse' // Claude
 	implementation 'org.springframework.ai:spring-ai-starter-model-bedrock'          // Titan embeddings
 	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'           // free local dev

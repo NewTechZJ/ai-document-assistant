@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.chat;
 
 import com.demo.aidocumentassistant.common.error.AiCallException;
@@ -10,9 +14,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * Sends a single message to the configured AI model (Bedrock or Ollama) and returns its reply.
+ *
+ * <p>Logs sizes, token counts and latency only, never the message or reply text.
+ */
 @Service
 public class ChatService {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ChatService.class);
+
     private final ChatClient chatClient;
     private final String configuredModel;
 
@@ -22,13 +33,20 @@ public class ChatService {
             @Value("${app.chat.system-prompt}") String systemPrompt) {
         this.chatClient = chatClientBuilder.defaultSystem(systemPrompt).build();
 
-        // Converse responses carry no model id, so this configured value is the fallback reported in ChatReply.
-        // Bedrock: spring.ai.bedrock.converse.chat.options.model · Ollama: spring.ai.ollama.chat.options.model
+        // Bedrock Converse responses have no model id, so ChatReply falls back to the configured model.
+        // Set by spring.ai.bedrock.converse.chat.model (aws) or spring.ai.ollama.chat.model (local).
         this.configuredModel = chatModel.getOptions().getModel();
     }
 
+    /**
+     * Sends one message to the AI model and returns its reply with token usage and latency.
+     *
+     * @param message the user's message (already validated)
+     * @return the model's reply
+     * @throws AiCallException if the model call fails or returns an empty response
+     */
     public ChatReply chat(String message) {
-        var startTime = System.nanoTime();
+        long startTime = System.nanoTime();
 
         ChatResponse response = callModel(message);
         if (response == null || response.getResult() == null) {
@@ -36,17 +54,17 @@ public class ChatService {
             throw new AiCallException("The AI model returned an empty response.", null);
         }
 
-        var replyText = response.getResult().getOutput().getText();
+        String replyText = response.getResult().getOutput().getText();
         if (!StringUtils.hasText(replyText)) {
             LOGGER.warn("AI call returned no text messageChars={}", message.length());
         }
 
         var metadata = response.getMetadata();
         var usage = metadata.getUsage();
-        var model = StringUtils.hasText(metadata.getModel()) ? metadata.getModel() : configuredModel;
-        var latencyMs = (System.nanoTime() - startTime) / 1_000_000;
+        String model = StringUtils.hasText(metadata.getModel()) ? metadata.getModel() : configuredModel;
+        long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
 
-        LOGGER.info("chat model={}  messageChars={} inTokens={} outTokens={} ms={}",
+        LOGGER.info("chat model={} messageChars={} inTokens={} outTokens={} ms={}",
                 model,
                 message.length(),
                 usage.getPromptTokens(),
@@ -58,11 +76,10 @@ public class ChatService {
                 model,
                 usage.getPromptTokens(),
                 usage.getCompletionTokens(),
-                latencyMs
-        );
+                latencyMs);
     }
 
-    /** Only the network call to the model is wrapped, so only real AI failures become a 502. */
+    /** Wraps only the network call, so that only real AI failures become a 502. */
     private ChatResponse callModel(String message) {
         try {
             return chatClient.prompt().user(message).call().chatResponse();
