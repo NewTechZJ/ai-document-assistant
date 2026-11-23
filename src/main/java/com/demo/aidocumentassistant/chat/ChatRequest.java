@@ -6,6 +6,9 @@ import jakarta.validation.constraints.Size;
 
 public record ChatRequest(
         @Schema(description = "User message", example = "Hello")
-        @NotBlank @Size(max = 500) String message
+        @NotBlank
+        @Size(max = ChatRequest.MAX_MESSAGE_CHARS)
+        String message
 ) {
+        public static final int MAX_MESSAGE_CHARS = 500;
 }

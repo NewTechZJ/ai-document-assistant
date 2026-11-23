@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.chat;
 
 import com.demo.aidocumentassistant.common.error.AiCallException;
@@ -10,8 +14,11 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
+import java.util.Objects;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,7 +28,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Plain unit test: ChatClient, ChatModel and ChatResponse are Mockito deep-stub mocks, no Spring context. */
+/**
+ * Unit tests for {@link ChatService} using Mockito mocks, without a Spring context.
+ */
 @ExtendWith(OutputCaptureExtension.class)
 class ChatServiceTest {
 
@@ -124,7 +133,18 @@ class ChatServiceTest {
 
         assertThrows(AiCallException.class, () -> service.chat("my secret medical question"));
 
+        assertTrue(output.getAll().contains("AI call failed messageChars=26"), output.getAll());
         assertFalse(output.getAll().contains("secret medical"), "user prompts must not be logged");
+    }
+
+    @Test
+    void missingTokenCountsAreReturnedAsNull() {
+        modelAnswers(response("Hi", "m", null, null));
+
+        ChatReply reply = service.chat("hi");
+
+        assertNull(reply.inputTokens());
+        assertNull(reply.outputTokens());
     }
 
     // ---------------------------------------------------------------- helpers
@@ -133,9 +153,9 @@ class ChatServiceTest {
         when(chatClient.prompt().user(anyString()).call().chatResponse()).thenReturn(response);
     }
 
-    private static ChatResponse response(String text, String model, int inTokens, int outTokens) {
+    private static ChatResponse response(String text, String model, Integer inTokens, Integer outTokens) {
         ChatResponse response = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
-        when(response.getResult().getOutput().getText()).thenReturn(text);
+        when(Objects.requireNonNull(response.getResult()).getOutput().getText()).thenReturn(text);
         when(response.getMetadata().getModel()).thenReturn(model);
         when(response.getMetadata().getUsage().getPromptTokens()).thenReturn(inTokens);
         when(response.getMetadata().getUsage().getCompletionTokens()).thenReturn(outTokens);
