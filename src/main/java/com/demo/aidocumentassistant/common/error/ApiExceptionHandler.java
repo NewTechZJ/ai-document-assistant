@@ -2,12 +2,14 @@ package com.demo.aidocumentassistant.common.error;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -83,6 +85,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, "5").body(problem);
     }
 
+    @ExceptionHandler(DocumentNotFoundException.class)
+    ProblemDetail handleDocumentNotFound(DocumentNotFoundException e) {
+        return problem(HttpStatus.NOT_FOUND, ErrorCode.DOCUMENT_NOT_FOUND, "Document not found", e);
+    }
+
+    @ExceptionHandler(DocumentNotReadyException.class)
+    ProblemDetail handleDocumentNotReady(DocumentNotReadyException e) {
+        return problem(HttpStatus.CONFLICT, ErrorCode.DOCUMENT_NOT_READY, "Document not ready", e);
+    }
+
     /** Anything unexpected: log it fully, tell the client nothing internal. */
     @ExceptionHandler(Exception.class)
     ProblemDetail handleUnexpected(Exception e) {
@@ -94,13 +106,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     // ---------------------------------------------------------------- Spring MVC's own exceptions
 
     /** Every exception handled by ResponseEntityExceptionHandler passes through here. */
+    /** Every exception handled by ResponseEntityExceptionHandler passes through here. */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
                                                              HttpStatusCode statusCode, WebRequest request) {
-        if (body instanceof ProblemDetail problem) {
+        // Most handle* methods of the superclass pass body = null and let super build it from the exception,
+        // so build it here first; otherwise the "code" property is never added.
+        Object resolvedBody = body;
+        if (resolvedBody == null && ex instanceof ErrorResponse errorResponse) {
+            resolvedBody = errorResponse.updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+        }
+        if (resolvedBody instanceof ProblemDetail problem) {
             problem.setProperty(CODE_PROPERTY, codeFor(ex, statusCode).name());
         }
-        return super.handleExceptionInternal(ex, body, headers, statusCode, request);
+        return super.handleExceptionInternal(ex, resolvedBody, headers, statusCode, request);
     }
 
     private static ErrorCode codeFor(Exception ex, HttpStatusCode status) {

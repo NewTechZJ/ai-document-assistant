@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.ingestion;
 
 import java.text.Normalizer;
@@ -12,7 +16,7 @@ import java.util.regex.Pattern;
  *   <li>inside a paragraph there are no newlines and no double spaces</li>
  *   <li>no leading/trailing whitespace</li>
  * </ul>
- * Package-private and stateless: it's a helper of PdfTextExtractor, tested directly.
+ * Package-private and stateless: it's a helper of PdfTextExtractor.
  */
 final class TextNormalizer {
 
@@ -39,6 +43,12 @@ final class TextNormalizer {
     private TextNormalizer() {
     }
 
+    /**
+     * Normalizes raw extracted text as described in the class contract.
+     *
+     * @param raw text as returned by PDFBox; may be {@code null} or empty
+     * @return the cleaned text; an empty string if {@code raw} is {@code null}, empty or only whitespace
+     */
     static String normalize(String raw) {
         if (raw == null || raw.isEmpty()) {
             return "";

@@ -52,4 +52,15 @@ class ApiExceptionHandlerTest {
         assertEquals("Bad request", problem.getTitle());
         assertEquals("The uploaded file is empty.", problem.getDetail());
     }
+
+    @Test
+    void frameworkErrorsAlsoGetACode() throws Exception {
+        var request = new org.springframework.web.context.request.ServletWebRequest(
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        var response = handler.handleException(new MaxUploadSizeExceededException(10 * 1024 * 1024), request);
+
+        assertEquals(413, response.getStatusCode().value());
+        assertEquals("FILE_TOO_LARGE", ((ProblemDetail) response.getBody()).getProperties().get("code"));
+    }
 }

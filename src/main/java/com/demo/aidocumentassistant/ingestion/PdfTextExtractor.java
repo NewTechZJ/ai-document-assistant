@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.ingestion;
 
 import com.demo.aidocumentassistant.common.error.EncryptedPdfException;
@@ -18,8 +22,7 @@ import java.util.List;
 /**
  * Turns PDF bytes into one {@link PageText} per page.
  * <p>
- * Plain Java on purpose (no Spring annotations): the same class will later run inside
- * the S3-event Lambda, and unit tests can just call {@code new PdfTextExtractor()}.
+ * Has no Spring annotations, so it can be created with {@code new PdfTextExtractor()} in tests.
  * The bean is registered in {@link IngestionConfig}.
  */
 public class PdfTextExtractor {
@@ -30,9 +33,25 @@ public class PdfTextExtractor {
 
     private final PdfLimits limits;
 
-    public PdfTextExtractor() { this(PdfLimits.defaults()); }
-    public PdfTextExtractor(PdfLimits limits) { this.limits = limits; }
+    public PdfTextExtractor() {
+        this(PdfLimits.defaults());
+    }
 
+    public PdfTextExtractor(PdfLimits limits) {
+        this.limits = limits;
+    }
+
+    /**
+     * Extracts the text of every page.
+     *
+     * @param pdfBytes the PDF file content
+     * @return one {@link PageText} per page, numbered from 1
+     * @throws NotAPdfException             if the bytes are empty or have no PDF header
+     * @throws EncryptedPdfException        if the PDF is password-protected or forbids text extraction
+     * @throws PdfTooLargeException         if the PDF exceeds the page, text or time limits
+     * @throws NoExtractableTextException   if no page has text (for example, a scanned document)
+     * @throws PdfExtractionException       if the PDF is corrupt or cannot be read
+     */
     public List<PageText> extract(byte[] pdfBytes) {
         requirePdfHeader(pdfBytes);
 
