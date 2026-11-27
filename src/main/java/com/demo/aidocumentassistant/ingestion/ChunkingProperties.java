@@ -1,8 +1,20 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.ingestion;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
+/**
+ * Chunking settings, under "app.chunking".
+ *
+ * @param targetChars  maximum characters per chunk
+ * @param overlapChars characters repeated from the end of the previous chunk at the start of the next one
+ * @param minChars     minimum characters of new text in the last chunk of a page; shorter text is merged
+ *                     into the previous chunk
+ */
 @ConfigurationProperties("app.chunking")
 public record ChunkingProperties(
         @DefaultValue("" + ChunkingProperties.DEFAULT_TARGET_CHARS) int targetChars,
@@ -28,6 +40,7 @@ public record ChunkingProperties(
         }
     }
 
+    /** Settings with all default values. */
     public static ChunkingProperties defaults() {
         return new ChunkingProperties(DEFAULT_TARGET_CHARS, DEFAULT_OVERLAP_CHARS, DEFAULT_MIN_CHARS);
     }

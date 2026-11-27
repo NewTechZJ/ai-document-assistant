@@ -15,6 +15,8 @@ public enum ErrorCode {
     BAD_REQUEST,
     SERVER_BUSY,
     AI_UNAVAILABLE,
+    DOCUMENT_NOT_FOUND,
+    DOCUMENT_NOT_READY,
     // framework errors
     VALIDATION_FAILED,
     MALFORMED_REQUEST,

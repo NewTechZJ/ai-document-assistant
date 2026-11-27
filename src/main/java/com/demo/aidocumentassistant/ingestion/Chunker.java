@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.ingestion;
 
 import java.text.BreakIterator;
@@ -22,10 +26,8 @@ import java.util.Objects;
  * (at most targetChars + 2 + minChars - 1: the merge adds the "\n\n" separator plus fewer than minChars).
  * <p>
  * Each page is chunked on its own, so a chunk's pageNumber is always exact for citations.
- * Plain Java: no Spring, no I/O, deterministic, so it's easy to unit-test thoroughly.
  */
 public class Chunker {
-    private static final String SENTENCE_SEPARATOR = " ";
 
     private final int targetChars;
     private final int overlapChars;
@@ -37,12 +39,15 @@ public class Chunker {
         this.minChars = properties.minChars();
     }
 
+    /**
+     * Splits each non-blank page into chunks; blank pages are skipped but later pages keep their real numbers.
+     */
     public List<Chunk> chunk(String docId, List<PageText> pages) {
         Objects.requireNonNull(docId, "docId");
         Objects.requireNonNull(pages, "pages");
 
         List<Chunk> chunks = new ArrayList<>();
-        int index = 0; // continuous across pages, so "{docId}#{index}" is unique within the document
+        int index = 0; // continuous across pages
         for (PageText page : pages) {
             if (page.isBlank()) {
                 continue; // an empty page produces no chunks, but later pages keep their real numbers
@@ -120,7 +125,7 @@ public class Chunker {
                 continue;
             }
             // Paragraph too long: split it into sentences (and over-long sentences into parts).
-            // Packing glues neighbouring sentences back together, so chunks still end on sentence boundaries.
+            // Packing glues neighboring sentences back together, so chunks still end on sentence boundaries.
             boolean isFirstPieceOfParagraph = true;
             for (Piece sentence : splitSentences(paragraph)) {
                 List<Piece> parts = sentence.text().length() <= targetChars
