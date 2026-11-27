@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 NewTechZJ. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package com.demo.aidocumentassistant.embedding;
 
 import com.demo.aidocumentassistant.common.error.AiCallException;
@@ -22,6 +26,7 @@ import java.util.Objects;
  * {@link AiCallException} (502), and logs texts / chars / input tokens / ms for every call. Text is never logged.
  */
 public class EmbeddingService {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(EmbeddingService.class);
 
     private final EmbeddingModel embeddingModel;
@@ -42,13 +47,21 @@ public class EmbeddingService {
         this.properties = Objects.requireNonNull(properties, "properties");
     }
 
-    /** Embeds a user question (with the query prefix). */
+    /**
+     * Embeds a user question (with the query prefix).
+     *
+     * @throws AiCallException if the embedding call fails or returns the wrong number of vectors
+     */
     public float[] embedQuery(String question) {
         Embeddings result = embedBatch(List.of(withPrefix(properties.queryPrefix(), question)), "query");
         return result.vectors().getFirst();
     }
 
-    /** Embeds chunk texts (with the document prefix), in batches of {@code app.embedding.batch-size}. */
+    /**
+     * Embeds chunk texts (with the document prefix), in batches of {@code app.embedding.batch-size}.
+     *
+     * @throws AiCallException if an embedding call fails or returns the wrong number of vectors
+     */
     public Embeddings embedDocuments(List<String> texts) {
         if (texts.isEmpty()) {
             return new Embeddings(List.of(), 0, 0);
@@ -68,6 +81,7 @@ public class EmbeddingService {
         return new Embeddings(List.copyOf(vectors), tokens, chars);
     }
 
+    /** Expected vector dimension for the active embedding model. */
     public int dimensions() {
         return properties.dimensions();
     }
@@ -133,5 +147,4 @@ public class EmbeddingService {
     private static String withPrefix(String prefix, String text) {
         return prefix.isEmpty() ? text : prefix + " " + text;
     }
-
 }
